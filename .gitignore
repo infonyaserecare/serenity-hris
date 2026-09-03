@@ -1,0 +1,23 @@
+# dependencies / build output
+node_modules/
+dist/
+.vite/
+
+# logs & os cruft
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# archives (source of truth is the tree, not the zips)
+*.zip
+
+# editor / tooling
+.vscode/
+.idea/
+.claude/
+
+# Abandoned scaffolds — the live prototype is hris-app.jsx + the Vite harness
+# (index.html, vite.config.js, preview/). These two folders are dead ends.
+hris-serenity/
+serenity-hris-backend/
