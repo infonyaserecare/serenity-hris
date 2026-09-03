@@ -1,0 +1,14 @@
+{
+  // Static site hosted as a Cloudflare Worker with static assets.
+  // No Worker script (`main`) — this is an assets-only deployment: wrangler
+  // just uploads ./dist. Using an explicit config here stops wrangler from
+  // trying to auto-wire the Cloudflare Vite plugin, which needs Vite >= 6
+  // (this project is on Vite 5).
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "serenity-hris",
+  "compatibility_date": "2026-09-03",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}
