@@ -9,6 +9,23 @@ that mounts it (`index.html`, `vite.config.js`, `preview/main.jsx`).
 - Device / GPS / face / Hadir integrations are **simulated** and labelled as such.
 - Clock follows the machine's local time (`new Date()`).
 
+## Data
+
+Ships **blank** (`const DEMO_DATA = false` near the top of `hris-app.jsx`):
+no employees, no attendance, no devices. You add the real organisation from
+inside the app.
+
+- **First sign-in:** username `admin`, any password. That is the one bootstrap
+  HR account. Everyone you add afterwards sets their own password via the
+  invite → activation flow.
+- **Lifecycle:** Employees → *Add employee* creates a person + a Pending
+  account → Administration → *Send invitation* (opens a pre‑filled email with a
+  one‑time code, or *Copy invitation*) → the new person uses *First time signing
+  in?* with their email + code → *Suspend* on the Active tab revokes access when
+  someone leaves.
+- Set `DEMO_DATA = true` to load a fictional 20‑person company with a month of
+  synthetic attendance (for demos / screenshots).
+
 ## Run locally
 
 ```bash

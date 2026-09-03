@@ -133,6 +133,12 @@ const ID_STRINGS = {
   "Not available in this prototype": "Belum tersedia di prototipe ini",
   "Notifications": "Pemberitahuan",
   "Nothing needs your attention right now.": "Tidak ada yang perlu perhatian Anda saat ini.",
+  "Nothing coming up.": "Tidak ada agenda mendatang.",
+  "No activity yet.": "Belum ada aktivitas.",
+  "No readers registered yet.": "Belum ada mesin terdaftar.",
+  "No fingerprints enrolled yet.": "Belum ada sidik jari terdaftar.",
+  "No work locations registered yet.": "Belum ada lokasi kerja terdaftar.",
+  "No phones registered yet.": "Belum ada ponsel terdaftar.",
   "Open Dashboard": "Buka Dasbor",
   "Account menu": "Menu akun",
   "{n} correction requests awaiting a decision": "{n} pengajuan koreksi menunggu keputusan",
@@ -519,8 +525,19 @@ const ID_STRINGS = {
   "Not issued": "Belum diterbitkan",
   "Send invitation": "Kirim undangan",
   "Send reminder": "Kirim pengingat",
+  "Send reminder again": "Kirim pengingat lagi",
   "Reminder sent": "Pengingat terkirim",
+  "Copy invitation": "Salin undangan",
   "Re-issue code": "Terbitkan ulang kode",
+  "Your Serenity HRIS account": "Akun Serenity HRIS Anda",
+  "Reminder: set up your Serenity HRIS sign-in": "Pengingat: siapkan data masuk Serenity HRIS Anda",
+  "Hi {name},": "Halo {name},",
+  "An account has been created for you in Serenity HRIS.":
+    "Sebuah akun telah dibuat untuk Anda di Serenity HRIS.",
+  "A reminder to set up your Serenity HRIS sign-in — it is still waiting for you.":
+    "Pengingat untuk menyiapkan data masuk Serenity HRIS Anda — masih menunggu Anda.",
+  "Company email: {email}": "Email perusahaan: {email}",
+  "One-time activation code: {code}": "Kode aktivasi sekali pakai: {code}",
   "Suspend": "Tangguhkan",
   "Restore access": "Pulihkan akses",
   "Nothing here": "Tidak ada apa-apa di sini",
@@ -913,6 +930,15 @@ const ID_STRINGS = {
 
 const I18N = { id: ID_STRINGS, en: {} };
 
+/* ================================================================== */
+/* DEMO DATA SWITCH                                                     */
+/* false = blank slate: no employees, no attendance, no devices — you   */
+/*   add the real organisation and records come only from real events.  */
+/* true  = a fictional company + a month of synthetic attendance, for   */
+/*   demos and screenshots.                                             */
+/* ================================================================== */
+const DEMO_DATA = false;
+
 // Set once per render by App, before any child reads it.
 let LANG = DEFAULT_LANG;
 
@@ -980,6 +1006,7 @@ const employees = rawEmployees.map((r, i) => {
     colorSeed: i,
   };
 });
+if (!DEMO_DATA) employees.length = 0;
 
 // Five brand-derived avatar colours, each with a matching tint. Kept as a
 // pair because a var() colour can't have an alpha suffix appended to it.
@@ -1675,6 +1702,8 @@ function generateDayRecord(emp, dateStr, ctx = {}) {
   const forced = ctx.scenario || scenarioFor(emp.id, dateStr);
   if (forced) return buildForcedRecord(emp, dateStr, sched, forced, today);
 
+  if (!DEMO_DATA) return mkRecord(emp, dateStr, sched, { status: ATT_STATUS.NOT_CLOCKED_IN });
+
   const seed = hashSeed(emp.id + "|" + dateStr);
   let k = 0;
   const rnd = () => pseudo(seed + (k++));
@@ -2032,7 +2061,7 @@ function last5Workdays(dateStr) {
 }
 
 const SELF = {
-  id: "EMP-0001", name: "Sri Wahyuni", dept: "Human Resources", position: "HR Admin",
+  id: "EMP-0001", name: DEMO_DATA ? "Sri Wahyuni" : "Administrator", dept: "Human Resources", position: "HR Admin",
   manager: "—", colorSeed: 99, role: "HR", joinDate: "2019-01-07", status: "Active",
 };
 
@@ -2143,6 +2172,40 @@ function accountSetupPlainText() {
   ].join("\n");
 }
 
+// A ready-to-send invitation. There is no mail server here — this is the text
+// HR hands the new person (by email, chat, on paper). `openInviteEmail` opens
+// the admin's own mail client with it pre-filled.
+function inviteEmailBody(account, kind) {
+  const emp = employeeById(account.employeeId);
+  const code = activationCodeFor(account.employeeId);
+  const first = (emp.name || "").split(" ")[0] || emp.name || "";
+  return [
+    t("Hi {name},", { name: first }),
+    "",
+    kind === "reminder"
+      ? t("A reminder to set up your Serenity HRIS sign-in — it is still waiting for you.")
+      : t("An account has been created for you in Serenity HRIS."),
+    "",
+    t("Company email: {email}", { email: account.email }),
+    t("One-time activation code: {code}", { code }),
+    "",
+    ...ACCOUNT_SETUP_STEPS.map((s, i) => `${i + 1}. ${t(s)}`),
+    "",
+    t(ACCOUNT_SETUP_FOOTNOTE),
+  ].join("\n");
+}
+function openInviteEmail(account, kind) {
+  const subject = kind === "reminder"
+    ? t("Reminder: set up your Serenity HRIS sign-in")
+    : t("Your Serenity HRIS account");
+  const href = `mailto:${encodeURIComponent(account.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(inviteEmailBody(account, kind))}`;
+  try {
+    const a = document.createElement("a");
+    a.href = href; a.style.display = "none";
+    document.body.appendChild(a); a.click(); a.remove();
+  } catch (e) { /* no mail client configured */ }
+}
+
 // Deterministic per-employee so the demo can display a code that stays put.
 function activationCodeFor(empId) {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no I/O/0/1 — they get misread aloud
@@ -2177,9 +2240,12 @@ const INVITED_ON = { "EMP-0231": daysAgo(8), "EMP-0499": daysAgo(13), "EMP-0087"
 
 function seedAccounts() {
   const rows = [{
-    employeeId: SELF.id, email: "sri.wahyuni@nusantara.co.id", status: ACCOUNT_STATUS.ACTIVE,
-    username: "sri.wahyuni", password: null, invitedAt: "2019-01-07", invitedBy: "System",
-    activatedAt: "2019-01-08", lastSignIn: daysAgo(1) + "T17:42:00",
+    employeeId: SELF.id,
+    email: DEMO_DATA ? "sri.wahyuni@nusantara.co.id" : "admin@serenity.local",
+    status: ACCOUNT_STATUS.ACTIVE,
+    username: DEMO_DATA ? "sri.wahyuni" : "admin",
+    password: null, invitedAt: SELF.joinDate, invitedBy: "System",
+    activatedAt: "2019-01-08", lastSignIn: DEMO_DATA ? daysAgo(1) + "T17:42:00" : null,
   }];
   for (const e of employees) {
     let status = ACCOUNT_STATUS.ACTIVE;
@@ -2385,8 +2451,8 @@ function buildNeedsAttention(corrections, getRecord) {
     // Someone is waiting on HR for these, so they outrank calendar notices.
     pendingCorr > 0 && { icon: FileText, tone: "warning", seg: "corrections", filter: null,
       text: t(pendingCorr === 1 ? "{n} attendance correction pending" : "{n} attendance corrections pending", { n: pendingCorr }), action: t("Review") },
-    { icon: CalendarDays, tone: "info", seg: null, filter: null, text: t("5 leave requests awaiting approval"), action: t("Review") },
-    { icon: FileWarning, tone: "info", seg: null, filter: null, text: t("2 contracts expire this month"), action: t("View") },
+    DEMO_DATA && { icon: CalendarDays, tone: "info", seg: null, filter: null, text: t("5 leave requests awaiting approval"), action: t("Review") },
+    DEMO_DATA && { icon: FileWarning, tone: "info", seg: null, filter: null, text: t("2 contracts expire this month"), action: t("View") },
   ].filter(Boolean);
   const rank = { danger: 0, warning: 1, info: 2 };
   return rows.sort((a, b2) => rank[a.tone] - rank[b2.tone]);
@@ -2425,6 +2491,18 @@ const performanceGoals = [
   { title: "Complete internal certification", progress: 45 },
   { title: "Mentor 2 junior team members", progress: 100 },
 ];
+
+// Blank slate: wipe every remaining seed dataset. const arrays/objects can
+// still be mutated — references elsewhere stay valid, they just read empty.
+if (!DEMO_DATA) {
+  for (const arr of [
+    HOLIDAYS, X100C_DEVICES, REGISTERED_LOCATIONS, MOBILE_DEVICES, FINGERPRINT_REGISTRATIONS,
+    FIELD_WORK_REQUESTS, ATTENDANCE_SCENARIOS, SEED_CORRECTIONS, SEED_AUDIT,
+    FIELD_CAPABLE, HADIR_EMPLOYEES,
+    upcoming, recentActivity, leaveHistory, employeeDocuments, performanceGoals,
+  ]) arr.length = 0;
+  for (const k of Object.keys(SEED_PERIODS)) delete SEED_PERIODS[k];
+}
 
 // `hr` gates screens that administer other people — only the HR role reaches
 // them. Everything else is visible to any signed-in user (placeholder screens
@@ -3338,6 +3416,7 @@ function NeedsAttention({ onOpenAttendance, corrections, getRecord, awaitingSetu
   return (
     <Card title={t("Needs attention")}>
       <div style={{ padding: "2px 8px 10px" }}>
+        {items.length === 0 && <div style={{ fontSize: 12.5, color: tokens.muted, padding: "8px" }}>{t("Nothing needs your attention right now.")}</div>}
         {items.map((item, i) => {
           const Icon = item.icon;
           return (
@@ -3385,6 +3464,7 @@ function UpcomingCard() {
   return (
     <Card title={t("Upcoming")}>
       <div style={{ padding: "2px 6px 12px" }}>
+        {upcoming.length === 0 && <div style={{ fontSize: 12.5, color: tokens.muted, padding: "8px 10px" }}>{t("Nothing coming up.")}</div>}
         {upcoming.map((u, i) => {
           const Icon = u.icon;
           return (
@@ -3404,6 +3484,7 @@ function RecentActivity() {
   return (
     <Card title={t("Recent activity")}>
       <div style={{ padding: "2px 16px 14px" }}>
+        {recentActivity.length === 0 && <div style={{ fontSize: 12.5, color: tokens.muted, padding: "4px 0" }}>{t("No activity yet.")}</div>}
         {recentActivity.map((a, i) => (
           <div key={i} style={{ display: "flex", gap: 10, position: "relative", paddingBottom: i < recentActivity.length - 1 ? 16 : 0 }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
@@ -3670,7 +3751,15 @@ function DL({ rows }) {
   );
 }
 
-function OverviewTab({ e }) {
+function OverviewTab({ e, store }) {
+  const attn = React.useMemo(() => {
+    if (!store) return { present: 0, late: 0, absent: 0 };
+    const r = monthRangeOf(TODAY_STR.slice(0, 7), TODAY_STR);
+    const recs = [];
+    let d = r.from;
+    while (d <= r.to) { recs.push(decorateRecord(store.getRecord(e.id, d))); d = addDays(d, 1); }
+    return monthSummary(recs);
+  }, [e.id, store]);
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 16 }} className="hris-dash-grid">
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -3690,22 +3779,26 @@ function OverviewTab({ e }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <Card title={t("Attendance this month")}>
           <div style={{ display: "flex", padding: "2px 16px 14px", gap: 20 }}>
-            {[["Present", "19", tokens.success], ["Late", "2", tokens.warning], ["Absent", "1", tokens.danger]].map(([l, v, c]) => (
-              <div key={l}><div style={{ fontSize: 18, fontWeight: 600, color: c }}>{v}</div><div style={{ fontSize: 12, color: tokens.muted }}>{t(l)}</div></div>
+            {[[t("Present"), attn.present, tokens.success], [t("Late"), attn.late, tokens.warning], [t("Absent"), attn.absent, tokens.danger]].map(([l, v, c]) => (
+              <div key={l}><div style={{ fontSize: 18, fontWeight: 600, color: c }}>{v}</div><div style={{ fontSize: 12, color: tokens.muted }}>{l}</div></div>
             ))}
           </div>
         </Card>
+        {DEMO_DATA && (
         <Card title={t("Leave balance")}>
           <div style={{ padding: "0 16px 14px" }}>
             <DL rows={[[t("Annual leave"), t("7 of 12 remaining")], [t("Upcoming leave"), t("18 Aug 2026 (2 days, pending)")]]} />
           </div>
         </Card>
+        )}
+        {DEMO_DATA && (
         <Card title={t("Recent activity")}>
           <div style={{ padding: "0 16px 14px" }}>
             <div style={{ fontSize: 13, color: tokens.ink, padding: "8px 0", borderBottom: `1px solid ${tokens.border}` }}>{t("Submitted a leave request")} <span style={{ color: tokens.faint }}>· {t("{n} days ago", { n: 2 })}</span></div>
             <div style={{ fontSize: 13, color: tokens.ink, padding: "8px 0" }}>{t("Clocked in at {time}", { time: "08:02" })} <span style={{ color: tokens.faint }}>· {t("today")}</span></div>
           </div>
         </Card>
+        )}
       </div>
     </div>
   );
@@ -3975,7 +4068,7 @@ function EmployeeProfile({ employeeId, onBack, onOpenAttendance, attendanceStore
         ))}
       </div>
 
-      {tab === "Overview" && <OverviewTab e={e} />}
+      {tab === "Overview" && <OverviewTab e={e} store={attendanceStore} />}
       {tab === "Personal" && <PersonalTab e={e} />}
       {tab === "Employment" && <EmploymentTab e={e} canSeePay={canSeePay} />}
       {tab === "Attendance" && <AttendanceTab employeeId={e.id} store={attendanceStore} viewerRole={viewerRole} viewerId={viewerId} onOpenAttendance={() => onOpenAttendance && onOpenAttendance(e.id)} />}
@@ -4029,7 +4122,10 @@ const emptyForm = {
 
 // "EMP-0512" style, one above the current highest.
 function nextEmployeeId() {
-  const n = employees.reduce((mx, e) => Math.max(mx, Number(String(e.id).replace(/\D/g, "")) || 0), 0) + 1;
+  // Start above the bootstrap admin (EMP-0001) so the first real hire is
+  // EMP-0002 and never collides with SELF.
+  const base = Number(String(SELF.id).replace(/\D/g, "")) || 0;
+  const n = employees.reduce((mx, e) => Math.max(mx, Number(String(e.id).replace(/\D/g, "")) || 0), base) + 1;
   return "EMP-" + String(n).padStart(4, "0");
 }
 function parseRupiah(s) { return Number(String(s || "").replace(/[^\d]/g, "")) || 0; }
@@ -6438,6 +6534,7 @@ function SourcesScreen() {
 
       <Card title={t("Fingerprint readers")}>
         <div style={{ padding: "0 16px 14px" }}>
+          {X100C_DEVICES.length === 0 && <div style={{ fontSize: 12.5, color: tokens.muted, padding: "12px 0" }}>{t("No readers registered yet.")}</div>}
           {X100C_DEVICES.map((d, i) => (
             <div key={d.id} style={{ padding: "12px 0", borderTop: i ? `1px solid ${tokens.border}` : "none" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
@@ -6488,6 +6585,9 @@ function SourcesScreen() {
             </tr>
           </thead>
           <tbody>
+            {FINGERPRINT_REGISTRATIONS.length === 0 && (
+              <tr><td colSpan={7} style={{ padding: "14px 16px", fontSize: 12.5, color: tokens.muted }}>{t("No fingerprints enrolled yet.")}</td></tr>
+            )}
             {FINGERPRINT_REGISTRATIONS.map((f, i) => (
               <tr key={f.employeeId} style={{ borderBottom: i < FINGERPRINT_REGISTRATIONS.length - 1 ? `1px solid ${tokens.border}` : "none" }}>
                 <td style={{ padding: "9px 16px", fontSize: 13, color: tokens.ink }}>{employeeById(f.employeeId).name}</td>
@@ -6510,6 +6610,7 @@ function SourcesScreen() {
 
       <Card title={t("Registered work locations")}>
         <div style={{ padding: "0 8px 12px" }}>
+          {REGISTERED_LOCATIONS.length === 0 && <div style={{ fontSize: 12.5, color: tokens.muted, padding: "12px 8px" }}>{t("No work locations registered yet.")}</div>}
           {REGISTERED_LOCATIONS.map((l, i) => (
             <div key={l.id} style={{ padding: "11px 8px", borderTop: i ? `1px solid ${tokens.border}` : "none" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
@@ -6545,6 +6646,9 @@ function SourcesScreen() {
             </tr>
           </thead>
           <tbody>
+            {MOBILE_DEVICES.length === 0 && (
+              <tr><td colSpan={7} style={{ padding: "14px 16px", fontSize: 12.5, color: tokens.muted }}>{t("No phones registered yet.")}</td></tr>
+            )}
             {MOBILE_DEVICES.map((d, i) => (
               <tr key={d.id} style={{ borderBottom: i < MOBILE_DEVICES.length - 1 ? `1px solid ${tokens.border}` : "none" }}>
                 <td style={{ padding: "9px 16px", fontSize: 13, color: tokens.ink }}>{employeeById(d.employeeId).name}</td>
@@ -6788,7 +6892,7 @@ function AttendanceModule({ focus, clearFocus, store, signedInId, signedInRole }
             {t("Monitor workforce attendance, exceptions, field work, and working hours. Records that need a person to look at them are listed first.")}
           </p>
         </div>
-        {signedInRole === "HR" && (
+        {signedInRole === "HR" && DEMO_DATA && (
           <div style={{ display: "flex", alignItems: "center", gap: 8 }} title={t("Preview the module as a different role — demo only")}>
             <Badge tone="muted">{t("Demo view")}</Badge>
             <Select value={role} onChange={(e) => setRole(e.target.value)} style={{ width: 150 }}>
@@ -6892,6 +6996,16 @@ function AdministrationScreen({ accounts, onInvite, onReissue, onRemind, onSuspe
   const [tab, setTab] = useState("awaiting");
   const [query, setQuery] = useState("");
   const [copied, setCopied] = useState(false);
+  const [copiedRow, setCopiedRow] = useState(null);
+
+  const copyInvite = (a) => {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(inviteEmailBody(a, a.status === ACCOUNT_STATUS.INVITED ? "reminder" : "invite"))
+        .then(() => { setCopiedRow(a.employeeId); setTimeout(() => setCopiedRow(null), 2500); }, () => {});
+    }
+  };
+  const sendInvite = (a) => { onInvite(a); openInviteEmail(a, "invite"); };
+  const sendReminder = (a) => { onRemind(a); openInviteEmail(a, "reminder"); };
 
   // Defence in depth: the route guard already keeps non-HR out, but every other
   // administer-others surface (Weekly Review, attendance mutations) also guards
@@ -7051,13 +7165,17 @@ function AdministrationScreen({ accounts, onInvite, onReissue, onRemind, onSuspe
 
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                       {a.status === ACCOUNT_STATUS.PENDING ? (
-                        <Button size="sm" onClick={() => onInvite(a)}>{t("Send invitation")}</Button>
+                        <>
+                          <Button size="sm" onClick={() => sendInvite(a)}>{t("Send invitation")}</Button>
+                        </>
                       ) : (
                         <>
                           <Button
-                            size="sm" variant="secondary" onClick={() => onRemind(a)}
-                            disabled={!!reminders[a.employeeId]}
-                          >{reminders[a.employeeId] ? t("Reminder sent") : t("Send reminder")}</Button>
+                            size="sm" variant="secondary" onClick={() => sendReminder(a)}
+                          >{reminders[a.employeeId] ? t("Send reminder again") : t("Send reminder")}</Button>
+                          <Button size="sm" variant="ghost" icon={copiedRow === a.employeeId ? Check : FileText} onClick={() => copyInvite(a)}>
+                            {copiedRow === a.employeeId ? t("Copied") : t("Copy invitation")}
+                          </Button>
                           <Button size="sm" variant="ghost" onClick={() => onReissue(a)}>{t("Re-issue code")}</Button>
                         </>
                       )}
