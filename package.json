@@ -4,6 +4,9 @@
   "version": "1.0.0",
   "type": "module",
   "description": "Serenity HRIS — single-file React prototype (hris-app.jsx) plus a Vite harness to run it.",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
