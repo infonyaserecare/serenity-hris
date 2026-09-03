@@ -25,13 +25,16 @@ npm run preview  # serve the built dist/ locally
 
 ## Deploy
 
-Static site → **Cloudflare Pages**. See [`DEPLOY.md`](./DEPLOY.md).
+Static site on **Cloudflare** (git‑connected Worker with static assets, config
+in `wrangler.jsonc`). See [`DEPLOY.md`](./DEPLOY.md).
 
 | Setting | Value |
 |---|---|
-| Framework preset | None / Vite |
 | Build command | `npm run build` |
+| Deploy command | `npx wrangler deploy` |
 | Build output directory | `dist` |
 | Root directory | *(repo root)* |
-| Node version | 20 (or newer) |
+| Node version | 20 (pinned by `.node-version`) |
 | Environment variables | *(none)* |
+
+Every `git push` to `main` triggers a rebuild + deploy.

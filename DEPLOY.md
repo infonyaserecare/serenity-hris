@@ -46,36 +46,56 @@ git push -u origin main
 `.gitignore` already excludes `node_modules/`, `dist/`, `*.zip`, and the two
 abandoned scaffolds (`hris-serenity/`, `serenity-hris-backend/`).
 
-## 3. Cloudflare Pages
+## 3. Cloudflare (git‑connected)
 
-**Dashboard → Workers & Pages → Create → Pages → Connect to Git**, pick the
-repo, then set:
+**Dashboard → Workers & Pages → Create → Connect to Git**, pick
+`infonyaserecare/serenity-hris`, then:
 
 | Field | Value |
 |---|---|
 | Production branch | `main` |
-| Framework preset | *None* (or Vite) |
 | Build command | `npm run build` |
+| Deploy command | `npx wrangler deploy` |
 | Build output directory | `dist` |
 | Root directory | *(leave blank)* |
 | Environment variables | *(none)* |
+| Node version | 20 (also pinned by `.node-version`) |
 
-Set `NODE_VERSION = 20` in the Pages project variables if the default build
-image uses an older Node.
+The unified dashboard creates this as a **Worker with static assets** (not a
+classic Pages project). That is fine for a static site — same result, URL is
+`serenity-hris.<account-subdomain>.workers.dev`.
 
-That is the whole configuration. Every `git push` to `main` then rebuilds and
-deploys; pushes to any other branch get a Preview URL.
+`wrangler.jsonc` in the repo root does the actual configuration:
 
-### Alternative: direct upload (no GitHub)
+```jsonc
+{
+  "name": "serenity-hris",
+  "compatibility_date": "2026-09-03",
+  "assets": { "directory": "./dist", "not_found_handling": "single-page-application" }
+}
+```
+
+It is **assets‑only** (no `main` Worker script) so `wrangler deploy` just
+uploads `./dist`. Without this file, `wrangler deploy` tries to auto‑wire the
+Cloudflare Vite plugin, which needs Vite ≥ 6 — this project is on Vite 5, so
+that path fails with:
+`The version of Vite used in the project ("5.4.21") cannot be automatically configured.`
+
+`public/_headers` and `public/_redirects` (copied into `dist/` by Vite) are
+honoured by Workers static assets too.
+
+Every `git push` to `main` rebuilds and deploys; other branches get a preview.
+
+### Alternative: direct upload from a workstation
 
 ```bash
 npm run build
-npx --yes wrangler@4 pages deploy dist --project-name serenity-hris
-# needs: a Cloudflare API token with "Cloudflare Pages: Edit"
-#        exported as CLOUDFLARE_API_TOKEN (and CLOUDFLARE_ACCOUNT_ID)
+npx --yes wrangler@4 deploy      # uses wrangler.jsonc
+# needs a logged-in wrangler (`wrangler login`) or:
+#   CLOUDFLARE_API_TOKEN  (Workers Scripts: Edit)  +  CLOUDFLARE_ACCOUNT_ID
 ```
 
-`npm run deploy` is wired to this command.
+`npm run deploy` runs `vite build` then `npx wrangler deploy`.
 
 ## 4. Verify the deployment (not just the homepage)
 
